@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard - Ingressantes x Concluintes x Registrados</title>
+<script src="https://cdn.plot.ly/plotly-2.35.0.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #fff; color: #333; }
+  .header { padding: 18px 30px 8px; display: flex; align-items: center; justify-content: space-between; }
+  .header h1 { font-size: 14px; font-weight: 600; color: #1a3a5c; }
+  .btn-print{width:28px;height:28px;border:1px solid #ccc;border-radius:5px;background:#fff;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;margin-left:10px;opacity:.45;transition:all .2s;flex-shrink:0}
+  .btn-print:hover{opacity:1;border-color:#1a6fc4;background:#f0f6fc}
+  .btn-print svg{width:15px;height:15px;fill:none;stroke:#555;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .btn-print:hover svg{stroke:#1a6fc4}
+  .btn-print.copied{border-color:#27ae60;background:#eafaf1}
+  .btn-print.copied svg{stroke:#27ae60}
+  .filtro-panel{display:flex;gap:20px;padding:16px 0 8px;border-top:1px solid #eee;margin-top:12px}
+  .filtro-col{display:flex;flex-direction:column;gap:6px}
+  .filtro-col-label{font-size:11px;font-weight:700;color:#1a3a5c;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+  .filtro-col-estados{display:grid;grid-template-columns:repeat(6,auto);gap:6px;align-content:flex-start;justify-content:start}
+  .btn-regiao,.btn-estado{padding:7px 14px;border:1.5px solid #1a6fc4;border-radius:6px;background:#fff;color:#1a6fc4;font-size:12px;font-weight:600;cursor:pointer;transition:all .25s ease;letter-spacing:.3px;user-select:none}
+  .btn-regiao:hover,.btn-estado:hover{background:#e8f0fa}
+  .btn-regiao.active{background:#1a6fc4;color:#fff;transform:scale(1.08);box-shadow:0 2px 8px rgba(26,111,196,.35);border-color:#1a6fc4}
+  .btn-estado.active{background:#1a6fc4;color:#fff;transform:scale(1.08);box-shadow:0 2px 8px rgba(26,111,196,.35);border-color:#1a6fc4}
+  .btn-regiao.dimmed,.btn-estado.dimmed{opacity:.45;transform:scale(.95);border-color:#bbb;color:#999;background:#f5f5f5}
+  .btn-regiao.dimmed:hover,.btn-estado.dimmed:hover{background:#eaeaea;opacity:.6}
+  .btn-estado.highlighted{border-color:#1a6fc4;background:#e8f0fa;transform:scale(1.04);font-weight:700}
+  .btn-regiao.region-linked{border-color:#e67e22;border-width:2.5px;color:#e67e22;background:#fff7ed}
+  .btn-estado.region-linked{border-color:#e67e22;border-width:2.5px;color:#e67e22;background:#fff7ed}
+  .btn-estado.active-in-region{background:#1a6fc4;color:#fff;transform:scale(1.08);box-shadow:0 2px 8px rgba(26,111,196,.35);border-color:#1a6fc4}
+  .btn-estado.disabled{opacity:.3;cursor:not-allowed;pointer-events:none;border-color:#ccc;color:#bbb;background:#f8f8f8;transform:scale(.93)}
+  .chk-milhares{display:flex;align-items:center;gap:5px;font-size:12px;color:#555;margin-left:auto;cursor:pointer}
+  .filtro-header{display:flex;align-items:center;gap:12px;margin-bottom:4px}
+  .totais-box{background:#fff;border:1.5px solid #1a6fc4;border-radius:6px;padding:14px 18px;min-width:0;max-width:780px;display:flex;flex-direction:column;gap:8px;margin-left:16px;align-self:stretch;justify-content:center;overflow-x:auto}
+  .totais-box .totais-titulo{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#1a3a5c;margin-bottom:4px;border-bottom:1px solid #e0e6ed;padding-bottom:5px;white-space:nowrap}
+  .totais-box .totais-linha{display:flex;justify-content:space-between;align-items:center;gap:14px}
+  .totais-box .totais-label{font-size:12px;font-weight:600;color:#1a6fc4}
+  .totais-box .totais-valor{font-size:13px;font-weight:700;color:#1a3a5c;letter-spacing:.3px}
+  .totais-table{width:100%;border-collapse:collapse}
+  .totais-table th,.totais-table td{padding:3px 5px;font-size:11.5px;text-align:right;white-space:nowrap}
+  .totais-table th{text-align:left;font-weight:600;color:#1a6fc4;font-size:11px}
+  .totais-table .col-hdr{font-size:10px;font-weight:700;color:#1a3a5c;text-align:center;border-bottom:1px solid #e0e6ed;padding-bottom:5px;letter-spacing:.5px}
+  .totais-table td.pct{color:#888;font-size:11px;font-weight:400;font-style:italic}
+  .totais-table td.val{font-weight:700;color:#1a3a5c;cursor:help}
+  .totais-table td.val:hover{color:#1a6fc4;text-decoration:underline dotted}
+  .totais-table .sep{border-left:1.5px solid #c0cad4;padding-left:8px}
+  .filtro-sel-label{font-size:13px;color:#1a6fc4;font-weight:600;min-height:18px}
+  .main-container { display: flex; padding: 0 30px 20px; gap: 24px; }
+  .chart-area { flex: 1; min-width: 0; }
+  .info-panel { width: 180px; display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; height: 520px; }
+  .info-box { background: #1a6fc4; color: #fff; border-radius: 8px; padding: 18px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; flex: 1; }
+  .info-box .text-side { display: flex; flex-direction: column; justify-content: center; align-items: center; }
+  .info-box .label { font-size: 15px; font-weight: 500; line-height: 1.3; }
+  .info-box .number { font-size: 48px; font-weight: 700; line-height: 1.1; }
+  .info-box .sublabel { font-size: 13px; font-weight: 400; opacity: 0.9; }
+  .fontes { padding: 10px 30px; font-size: 11px; color: #888; line-height: 1.6; }
+  .fontes strong { color: #555; }
+  .egg-zone{position:absolute;top:6px;left:50%;transform:translateX(-50%);width:220px;height:16px;cursor:pointer;z-index:10}
+  .egg-zone.revealed{cursor:default;display:flex;align-items:center;justify-content:center;gap:4px}
+  .egg-btn{display:none;padding:1px 7px;font-size:11px;border:1px solid #ccc;border-radius:3px;background:#fff;color:#888;cursor:pointer;line-height:1.4}
+  .egg-btn:hover{background:#f0f6fc;border-color:#1a6fc4;color:#1a6fc4}
+  .egg-zone.revealed .egg-btn{display:inline-block}
+  @media (max-width: 900px) {
+    .main-container { flex-direction: column; }
+    .info-panel { width: 100%; flex-direction: row; flex-wrap: wrap; }
+    .info-box { flex: 1; min-width: 220px; }
+  }
+  .info-box{position:relative;cursor:help}
+  .info-box .tooltip{display:none;position:absolute;right:calc(100% + 14px);top:0;width:350px;background:#fff;color:#333;border:1px solid #d0d7de;border-radius:10px;padding:18px 16px;font-size:12px;line-height:1.7;box-shadow:0 6px 24px rgba(0,0,0,.15);z-index:100;text-align:left;pointer-events:none}
+  .info-box:hover .tooltip{display:block}
+  .tooltip .tt-title{font-size:13px;font-weight:700;color:#1a6fc4;margin-bottom:6px;border-bottom:1px solid #e8ecf0;padding-bottom:6px}
+  .tooltip .tt-ex{background:#f5f8fb;border-radius:6px;padding:10px;margin:8px 0;font-size:11.5px;border-left:3px solid #1a6fc4}
+  .tooltip .tt-nota{font-size:11px;color:#777;margin-top:8px;font-style:italic}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>CONFEA &mdash; Painel de Acompanhamento de Profissionais</h1>
+  <button class="btn-print" id="btnCapture" onclick="capturarDashboard()" title="Copiar imagem do painel">
+    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="3.5"/><path d="M3 8h2M19 8h2"/></svg>
+  </button>
+</div>
+
+<div class="main-container">
+  <div class="chart-area">
+    <div style="position:relative">
+      <div class="egg-zone" id="eggZone" onclick="ativarEgg(event)"></div>
+      <div id="grafico" style="width:100%;height:520px;"></div>
+    </div>
+    <div class="filtro-panel">
+      <div class="filtro-col">
+        <div class="filtro-col-label">Regi&atilde;o</div>
+        <button class="btn-regiao" data-regiao="NORTE" onclick="selecionarRegiao('NORTE')">NORTE</button><button class="btn-regiao" data-regiao="NORDESTE" onclick="selecionarRegiao('NORDESTE')">NORDESTE</button><button class="btn-regiao" data-regiao="CENTRO-OESTE" onclick="selecionarRegiao('CENTRO-OESTE')">CENTRO-OESTE</button><button class="btn-regiao" data-regiao="SUDESTE" onclick="selecionarRegiao('SUDESTE')">SUDESTE</button><button class="btn-regiao" data-regiao="SUL" onclick="selecionarRegiao('SUL')">SUL</button>
+      </div>
+      <div class="filtro-col" style="flex:0 1 auto">
+        <div class="filtro-header">
+          <span class="filtro-col-label">Estado</span>
+          <span class="filtro-sel-label" id="selLabel">Brasil (Total)</span>
+          <label class="chk-milhares">
+            <input type="checkbox" id="chkMilhares" checked onchange="atualizarDashboard()"> Em milhares
+          </label>
+        </div>
+        <div class="filtro-col-estados" id="estadosContainer">
+          <button class="btn-estado" data-uf="AC" onclick="selecionarEstado('AC')">AC</button><button class="btn-estado" data-uf="AL" onclick="selecionarEstado('AL')">AL</button><button class="btn-estado" data-uf="AM" onclick="selecionarEstado('AM')">AM</button><button class="btn-estado" data-uf="AP" onclick="selecionarEstado('AP')">AP</button><button class="btn-estado" data-uf="BA" onclick="selecionarEstado('BA')">BA</button><button class="btn-estado" data-uf="CE" onclick="selecionarEstado('CE')">CE</button><button class="btn-estado" data-uf="DF" onclick="selecionarEstado('DF')">DF</button><button class="btn-estado" data-uf="ES" onclick="selecionarEstado('ES')">ES</button><button class="btn-estado" data-uf="GO" onclick="selecionarEstado('GO')">GO</button><button class="btn-estado" data-uf="MA" onclick="selecionarEstado('MA')">MA</button><button class="btn-estado" data-uf="MG" onclick="selecionarEstado('MG')">MG</button><button class="btn-estado" data-uf="MS" onclick="selecionarEstado('MS')">MS</button><button class="btn-estado" data-uf="MT" onclick="selecionarEstado('MT')">MT</button><button class="btn-estado" data-uf="PA" onclick="selecionarEstado('PA')">PA</button><button class="btn-estado" data-uf="PB" onclick="selecionarEstado('PB')">PB</button><button class="btn-estado" data-uf="PE" onclick="selecionarEstado('PE')">PE</button><button class="btn-estado" data-uf="PI" onclick="selecionarEstado('PI')">PI</button><button class="btn-estado" data-uf="PR" onclick="selecionarEstado('PR')">PR</button><button class="btn-estado" data-uf="RJ" onclick="selecionarEstado('RJ')">RJ</button><button class="btn-estado" data-uf="RN" onclick="selecionarEstado('RN')">RN</button><button class="btn-estado" data-uf="RO" onclick="selecionarEstado('RO')">RO</button><button class="btn-estado" data-uf="RR" onclick="selecionarEstado('RR')">RR</button><button class="btn-estado" data-uf="RS" onclick="selecionarEstado('RS')">RS</button><button class="btn-estado" data-uf="SC" onclick="selecionarEstado('SC')">SC</button><button class="btn-estado" data-uf="SE" onclick="selecionarEstado('SE')">SE</button><button class="btn-estado" data-uf="SP" onclick="selecionarEstado('SP')">SP</button><button class="btn-estado" data-uf="TO" onclick="selecionarEstado('TO')">TO</button>
+        </div>
+      </div>
+      <div class="totais-box" id="totaisBox"></div>
+    </div>
+    <div class="fontes">
+      <strong>Fontes:</strong><br>
+      Painel estat&iacute;stico censo da educa&ccedil;&atilde;o superior &mdash; INEP<br>
+      SIC &mdash; Sistema de Informa&ccedil;&atilde;o e Comunica&ccedil;&atilde;o do CONFEA/CREAs
+    </div>
+  </div>
+
+  <div class="info-panel">
+    <div class="info-box">
+      <div class="text-side">
+        <div class="label">De cada</div>
+        <div class="number">100</div>
+        <div class="sublabel">ingressantes</div>
+      </div>
+      <div class="tooltip">
+        <div class="tt-title">&#9432; Base de refer&ecirc;ncia</div>
+        Valor fixo que representa a base de c&aacute;lculo. Os indicadores abaixo expressam, proporcionalmente, quantos concluintes e registrados correspondem a cada grupo de <b>100 ingressantes</b>.
+      </div>
+      </div>
+
+    <div class="info-box">
+      <div class="text-side">
+        <div class="label">Concluem</div>
+        <div class="sublabel">(Ap&oacute;s 6 anos)</div>
+        <div class="number" id="taxaConclusao">38</div>
+      </div>
+      <div class="tooltip">
+        <div class="tt-title">&#9432; Como funciona este indicador</div>
+        Para cada ano, o sistema compara o n&uacute;mero de <b>concluintes</b> com o n&uacute;mero de <b>ingressantes de 6 anos antes</b> (dura&ccedil;&atilde;o t&iacute;pica de engenharia).<br><br>
+        <div class="tt-ex">
+          <b>Exemplo:</b><br>
+          Formados em 2022: 50.000<br>
+          Ingressantes em 2016: 200.000<br>
+          Raz&atilde;o: 50.000 &divide; 200.000 = 0,25
+        </div>
+        O sistema repete para todos os pares poss&iacute;veis (2021&harr;2015, 2020&harr;2014...), calcula a <b>m&eacute;dia</b> das raz&otilde;es e multiplica por 100.<br>
+        <div class="tt-nota">&#9432; Anos sem dados de ingressantes 6 anos antes s&atilde;o descartados. Com dados a partir de 2010, somente concluintes de 2016 em diante participam do c&aacute;lculo.</div>
+      </div>
+    </div>
+
+    <div class="info-box">
+      <div class="text-side">
+        <div class="label">Registram-se</div>
+        <div class="sublabel">no Sistema</div>
+        <div class="number" id="taxaRegistro">17</div>
+        <div class="sublabel" style="font-size:12px;margin-top:4px;opacity:.85"><span id="taxaConversao"></span>% dos concluintes</div>
+      </div>
+      <div class="tooltip">
+        <div class="tt-title">&#9432; Como funciona este indicador</div>
+        Mesma l&oacute;gica do indicador &ldquo;Concluem&rdquo;: para cada ano, o sistema divide o n&uacute;mero de <b>novos registros no CREA</b> pelo n&uacute;mero de <b>ingressantes de 6 anos antes</b>.<br><br>
+        <div class="tt-ex">
+          <b>Exemplo:</b><br>
+          Novos registros em 2022: 30.000<br>
+          Ingressantes em 2016: 200.000<br>
+          Raz&atilde;o: 30.000 &divide; 200.000 = 0,15
+        </div>
+        O sistema repete para todos os pares poss&iacute;veis (2021&harr;2015, 2020&harr;2014...), calcula a <b>m&eacute;dia</b> e multiplica por 100.<br>
+        <div class="tt-nota">&#9432; A defasagem de 6 anos &eacute; a mesma usada em &ldquo;Concluem&rdquo;, mantendo a coer&ecirc;ncia: os tr&ecirc;s indicadores se referem ao mesmo grupo hipot&eacute;tico de ingressantes.</div>
+        <div style="margin-top:10px;border-top:1px solid #e0e6ed;padding-top:8px">
+          <b>% dos concluintes</b><br>
+          Divis&atilde;o direta entre os dois indicadores acima:<br>
+          <b>&ldquo;Registram-se&rdquo; &divide; &ldquo;Concluem&rdquo;</b>.<br>
+          Como ambos usam a mesma base (ingressantes de 6 anos antes), esta raz&atilde;o representa a propor&ccedil;&atilde;o real de formados que se tornam profissionais registrados.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var DADOS = {"Brasil": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [281011, 335268, 419645, 448879, 503025, 460517, 405778, 373154, 335962, 311652, 265513, 225581, 237575, 232679, 219192], "concluintes": [82936, 89244, 97985, 102475, 110410, 128201, 147923, 162954, 182068, 178495, 160236, 142682, 132012, 120303, 105064], "registrados": [43882, 46722, 47064, 50793, 53227, 52063, 54683, 64156, 67231, 76366, 66694, 74897, 71191, 70227, 64486], "reingresso": [18966, 16454, 15943, 14733, 13290, 12041, 11330, 12809, 13348, 16538, 17085, 22095, 22010, 24398, 22405], "primeiro_deslig": [7452, 7485, 16012, 15822, 17532, 21134, 23868, 32399, 27795, 39917, 34510, 35083, 46468, 35669, 36777], "deslig_recorrente": [137, 197, 436, 625, 903, 1335, 1681, 2371, 2664, 3433, 3620, 4386, 5298, 5745, 6569], "total_ativacoes": [62848, 63176, 63007, 65526, 66517, 64104, 66013, 76965, 80579, 92904, 83779, 96992, 93201, 94625, 86891], "total_desligamentos": [7589, 7682, 16448, 16447, 18435, 22469, 25549, 34770, 30459, 43350, 38130, 39469, 51766, 41414, 43346], "saldo_liquido": [55259, 55494, 46559, 49079, 48082, 41635, 40464, 42195, 50120, 49554, 45649, 57523, 41435, 53211, 43545], "registrados_masc": [34567, 36581, 36837, 39219, 40400, 39157, 40774, 47304, 48560, 54749, 47423, 53344, 51048, 50871, 46923], "registrados_fem": [9315, 10141, 10227, 11574, 12827, 12906, 13909, 16852, 18671, 21617, 19271, 21553, 20143, 19356, 17563]}, "AC": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [657, 902, 1071, 1357, 1235, 1130, 1309, 1203, 1161, 934, 695, 480, 662, 578, 448], "concluintes": [234, 511, 177, 304, 366, 256, 350, 425, 558, 498, 573, 376, 444, 254, 236], "registrados": [71, 103, 75, 89, 100, 110, 87, 104, 140, 216, 160, 273, 191, 218, 154], "reingresso": [49, 32, 20, 36, 33, 25, 19, 29, 15, 24, 15, 38, 99, 71, 77], "primeiro_deslig": [3, 3, 7, 15, 13, 12, 34, 58, 108, 145, 80, 63, 188, 142, 142], "deslig_recorrente": [0, 0, 0, 0, 0, 0, 1, 2, 1, 2, 4, 6, 10, 14, 16], "total_ativacoes": [120, 135, 95, 125, 133, 135, 106, 133, 155, 240, 175, 311, 290, 289, 231], "total_desligamentos": [3, 3, 7, 15, 13, 12, 35, 60, 109, 147, 84, 69, 198, 156, 158], "saldo_liquido": [117, 132, 88, 110, 120, 123, 71, 73, 46, 93, 91, 242, 92, 133, 73], "registrados_masc": [53, 64, 34, 60, 65, 67, 66, 71, 94, 145, 105, 173, 130, 155, 105], "registrados_fem": [18, 39, 41, 29, 35, 43, 21, 33, 46, 71, 55, 100, 61, 63, 49]}, "AL": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [2476, 2524, 2977, 4534, 5648, 4354, 4511, 3800, 3650, 3182, 2765, 2252, 2481, 2644, 2323], "concluintes": [874, 787, 692, 703, 705, 1121, 1199, 1452, 1582, 1752, 1184, 1285, 1070, 1100, 1028], "registrados": [293, 331, 307, 358, 322, 404, 382, 470, 529, 636, 576, 757, 692, 725, 544], "reingresso": [97, 102, 336, 511, 562, 399, 212, 84, 67, 208, 206, 347, 322, 346, 275], "primeiro_deslig": [20, 36, 70, 65, 45, 77, 126, 145, 174, 434, 395, 414, 415, 462, 379], "deslig_recorrente": [2, 0, 3, 4, 6, 10, 13, 10, 22, 37, 39, 60, 48, 72, 82], "total_ativacoes": [390, 433, 643, 869, 884, 803, 594, 554, 596, 844, 782, 1104, 1014, 1071, 819], "total_desligamentos": [22, 36, 73, 69, 51, 87, 139, 155, 196, 471, 434, 474, 463, 534, 461], "saldo_liquido": [368, 397, 570, 800, 833, 716, 455, 399, 400, 373, 348, 630, 551, 537, 358], "registrados_masc": [245, 266, 246, 295, 272, 327, 292, 352, 400, 499, 429, 540, 520, 533, 400], "registrados_fem": [48, 65, 61, 63, 50, 77, 90, 118, 129, 137, 147, 217, 172, 192, 144]}, "AM": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [6557, 7946, 8933, 9429, 10317, 10378, 7880, 6832, 6788, 5160, 4854, 3672, 3710, 4865, 4380], "concluintes": [1155, 1272, 2338, 2234, 1551, 2808, 3079, 2248, 4108, 2590, 2431, 1987, 2317, 2029, 1668], "registrados": [549, 707, 552, 769, 838, 802, 693, 986, 1136, 1344, 1385, 1209, 1137, 1210, 888], "reingresso": [467, 175, 131, 138, 80, 143, 142, 175, 221, 114, 184, 211, 245, 315, 302], "primeiro_deslig": [31, 63, 41, 49, 131, 316, 199, 346, 503, 584, 728, 941, 561, 582, 644], "deslig_recorrente": [0, 0, 2, 1, 1, 3, 8, 7, 19, 18, 33, 57, 53, 73, 101], "total_ativacoes": [1016, 882, 683, 907, 918, 945, 835, 1161, 1357, 1458, 1569, 1420, 1382, 1525, 1190], "total_desligamentos": [31, 63, 43, 50, 132, 319, 207, 353, 522, 602, 761, 998, 614, 655, 745], "saldo_liquido": [985, 819, 640, 857, 786, 626, 628, 808, 835, 856, 808, 422, 768, 870, 445], "registrados_masc": [398, 515, 407, 578, 653, 562, 507, 727, 797, 944, 902, 842, 781, 826, 634], "registrados_fem": [151, 192, 145, 191, 185, 240, 186, 259, 339, 400, 483, 367, 356, 384, 254]}, "AP": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [647, 616, 1076, 1137, 1653, 1368, 1860, 1524, 1468, 1088, 935, 721, 787, 796, 822], "concluintes": [143, 178, 181, 213, 275, 246, 399, 382, 418, 339, 486, 392, 375, 319, 336], "registrados": [68, 60, 59, 78, 58, 48, 80, 92, 82, 69, 90, 256, 229, 263, 213], "reingresso": [37, 52, 38, 19, 10, 16, 14, 31, 30, 37, 71, 51, 52, 55, 63], "primeiro_deslig": [3, 23, 27, 37, 34, 91, 60, 82, 56, 65, 38, 94, 69, 119, 99], "deslig_recorrente": [0, 0, 1, 0, 1, 0, 0, 1, 0, 7, 0, 3, 3, 5, 5], "total_ativacoes": [105, 112, 97, 97, 68, 64, 94, 123, 112, 106, 161, 307, 281, 318, 276], "total_desligamentos": [3, 23, 28, 37, 35, 91, 60, 83, 56, 72, 38, 97, 72, 124, 104], "saldo_liquido": [102, 89, 69, 60, 33, -27, 34, 40, 56, 34, 123, 210, 209, 194, 172], "registrados_masc": [57, 43, 42, 59, 45, 39, 55, 54, 58, 58, 74, 186, 156, 201, 154], "registrados_fem": [11, 17, 17, 19, 13, 9, 25, 38, 24, 11, 16, 70, 73, 62, 59]}, "BA": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [11504, 14676, 17188, 17916, 20409, 19452, 16684, 16973, 16706, 13874, 10570, 8010, 10906, 9023, 9340], "concluintes": [2730, 3064, 3699, 3279, 4007, 4716, 4383, 5861, 6643, 6635, 6823, 5179, 5346, 4446, 4659], "registrados": [2149, 2538, 2546, 2390, 2470, 2381, 2454, 2547, 2780, 3649, 3158, 3740, 3729, 3618, 3075], "reingresso": [777, 472, 456, 338, 273, 247, 268, 452, 681, 873, 1277, 1839, 1764, 1525, 1303], "primeiro_deslig": [151, 200, 350, 392, 569, 652, 758, 4666, 823, 4411, 3483, 1861, 1844, 1596, 1435], "deslig_recorrente": [7, 4, 7, 33, 28, 51, 46, 61, 61, 141, 202, 234, 253, 205, 287], "total_ativacoes": [2926, 3010, 3002, 2728, 2743, 2628, 2722, 2999, 3461, 4522, 4435, 5579, 5493, 5143, 4378], "total_desligamentos": [158, 204, 357, 425, 597, 703, 804, 4727, 884, 4552, 3685, 2095, 2097, 1801, 1722], "saldo_liquido": [2768, 2806, 2645, 2303, 2146, 1925, 1918, -1728, 2577, -30, 750, 3484, 3396, 3342, 2656], "registrados_masc": [1557, 1852, 1829, 1727, 1770, 1699, 1696, 1792, 1953, 2526, 2171, 2569, 2584, 2544, 2196], "registrados_fem": [592, 686, 717, 663, 700, 682, 758, 755, 827, 1123, 987, 1171, 1145, 1074, 879]}, "CE": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [5633, 7040, 8109, 10299, 12641, 14131, 12433, 11641, 10297, 9669, 9062, 7383, 7291, 7306, 6779], "concluintes": [1697, 1808, 1800, 2047, 2043, 2263, 2601, 3495, 3907, 4558, 3810, 3822, 3348, 3895, 3241], "registrados": [791, 821, 816, 1033, 935, 1041, 829, 1244, 1500, 1912, 1743, 1957, 1914, 1932, 1698], "reingresso": [572, 370, 268, 259, 211, 202, 144, 199, 259, 384, 488, 607, 644, 619, 564], "primeiro_deslig": [116, 129, 397, 491, 399, 304, 377, 1286, 718, 1354, 841, 830, 1075, 946, 1200], "deslig_recorrente": [5, 7, 5, 12, 17, 20, 26, 59, 72, 158, 137, 128, 210, 213, 284], "total_ativacoes": [1363, 1191, 1084, 1292, 1146, 1243, 973, 1443, 1759, 2296, 2231, 2564, 2558, 2551, 2262], "total_desligamentos": [121, 136, 402, 503, 416, 324, 403, 1345, 790, 1512, 978, 958, 1285, 1159, 1484], "saldo_liquido": [1242, 1055, 682, 789, 730, 919, 570, 98, 969, 784, 1253, 1606, 1273, 1392, 778], "registrados_masc": [567, 629, 652, 795, 730, 811, 645, 917, 1108, 1376, 1266, 1437, 1422, 1407, 1266], "registrados_fem": [224, 192, 164, 238, 205, 230, 184, 327, 392, 536, 477, 520, 492, 525, 432]}, "DF": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [5686, 6390, 7170, 9132, 10438, 9197, 7723, 6202, 5297, 5201, 4464, 3684, 4317, 4067, 4422], "concluintes": [1336, 1236, 1492, 1435, 1953, 2365, 2711, 3374, 3450, 4008, 2771, 2339, 2251, 2256, 1706], "registrados": [957, 880, 796, 841, 949, 1073, 1085, 1347, 1326, 1834, 1372, 1342, 1274, 1192, 1025], "reingresso": [320, 188, 207, 148, 130, 101, 107, 98, 122, 128, 108, 162, 145, 112, 126], "primeiro_deslig": [121, 263, 196, 235, 186, 167, 210, 526, 404, 489, 425, 267, 197, 225, 221], "deslig_recorrente": [5, 4, 9, 13, 6, 9, 8, 19, 22, 36, 32, 22, 23, 14, 19], "total_ativacoes": [1277, 1068, 1003, 989, 1079, 1174, 1192, 1445, 1448, 1962, 1480, 1504, 1419, 1304, 1151], "total_desligamentos": [126, 267, 205, 248, 192, 176, 218, 545, 426, 525, 457, 289, 220, 239, 240], "saldo_liquido": [1151, 801, 798, 741, 887, 998, 974, 900, 1022, 1437, 1023, 1215, 1199, 1065, 911], "registrados_masc": [760, 691, 622, 664, 744, 868, 853, 1040, 999, 1359, 1018, 982, 933, 877, 743], "registrados_fem": [197, 189, 174, 177, 205, 205, 232, 307, 327, 475, 354, 360, 341, 315, 282]}, "ES": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [5980, 6512, 9264, 7961, 10349, 9060, 7465, 6473, 5804, 5931, 4574, 4508, 4324, 3928, 4225], "concluintes": [1497, 1554, 1831, 1812, 2011, 2217, 3016, 3558, 4011, 3707, 3694, 2722, 2490, 2164, 1886], "registrados": [840, 962, 1000, 963, 1001, 1247, 1243, 1626, 1605, 1945, 1529, 1874, 1637, 1604, 1359], "reingresso": [302, 282, 380, 236, 264, 366, 230, 425, 217, 366, 285, 372, 249, 297, 259], "primeiro_deslig": [73, 75, 138, 134, 153, 215, 321, 480, 419, 3026, 443, 453, 419, 394, 397], "deslig_recorrente": [2, 1, 3, 2, 4, 12, 12, 22, 22, 71, 56, 52, 67, 66, 62], "total_ativacoes": [1142, 1244, 1380, 1199, 1265, 1613, 1473, 2051, 1822, 2311, 1814, 2246, 1886, 1901, 1618], "total_desligamentos": [75, 76, 141, 136, 157, 227, 333, 502, 441, 3097, 499, 505, 486, 460, 459], "saldo_liquido": [1067, 1168, 1239, 1063, 1108, 1386, 1140, 1549, 1381, -786, 1315, 1741, 1400, 1441, 1159], "registrados_masc": [646, 725, 758, 700, 713, 822, 840, 1117, 1030, 1303, 1042, 1239, 1120, 1095, 973], "registrados_fem": [194, 237, 242, 263, 288, 425, 403, 509, 575, 642, 487, 635, 517, 509, 386]}, "GO": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [8401, 10681, 14138, 15261, 16846, 15962, 13598, 12584, 10762, 10735, 8446, 8039, 9101, 9726, 8730], "concluintes": [2651, 3012, 2795, 3435, 3716, 4339, 4780, 5681, 6023, 6074, 5131, 5076, 4247, 4008, 3174], "registrados": [1808, 1465, 1339, 1536, 1919, 2389, 2317, 2772, 2760, 3205, 2767, 3039, 2853, 2673, 2500], "reingresso": [444, 819, 707, 778, 781, 1001, 1370, 1528, 1360, 470, 578, 882, 909, 823, 1445], "primeiro_deslig": [186, 259, 349, 330, 351, 758, 954, 991, 917, 1356, 1392, 1607, 1646, 1204, 2508], "deslig_recorrente": [14, 18, 26, 30, 35, 60, 85, 105, 123, 178, 165, 227, 296, 342, 427], "total_ativacoes": [2252, 2284, 2046, 2314, 2700, 3390, 3687, 4300, 4120, 3675, 3345, 3921, 3762, 3496, 3945], "total_desligamentos": [200, 277, 375, 360, 386, 818, 1039, 1096, 1040, 1534, 1557, 1834, 1942, 1546, 2935], "saldo_liquido": [2052, 2007, 1671, 1954, 2314, 2572, 2648, 3204, 3080, 2141, 1788, 2087, 1820, 1950, 1010], "registrados_masc": [1425, 1134, 1056, 1195, 1476, 1843, 1703, 2055, 1979, 2278, 1903, 2130, 2007, 1861, 1787], "registrados_fem": [383, 331, 283, 341, 443, 546, 614, 717, 781, 927, 864, 909, 846, 812, 713]}, "MA": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [2369, 3679, 4421, 5053, 6975, 7270, 6484, 7387, 5951, 5164, 3193, 3165, 3260, 3409, 3274], "concluintes": [421, 644, 664, 927, 1179, 1342, 1931, 2169, 2530, 2705, 2950, 2537, 2427, 2180, 1593], "registrados": [400, 393, 306, 350, 543, 564, 593, 935, 984, 1304, 1263, 1458, 1380, 1484, 1137], "reingresso": [214, 98, 101, 94, 73, 54, 29, 37, 44, 130, 351, 470, 360, 390, 385], "primeiro_deslig": [10, 25, 26, 16, 58, 44, 78, 123, 121, 353, 618, 577, 522, 528, 596], "deslig_recorrente": [0, 1, 0, 0, 0, 2, 1, 1, 6, 12, 19, 48, 57, 66, 85], "total_ativacoes": [614, 491, 407, 444, 616, 618, 622, 972, 1028, 1434, 1614, 1928, 1740, 1874, 1522], "total_desligamentos": [10, 26, 26, 16, 58, 46, 79, 124, 127, 365, 637, 625, 579, 594, 681], "saldo_liquido": [604, 465, 381, 428, 558, 572, 543, 848, 901, 1069, 977, 1303, 1161, 1280, 841], "registrados_masc": [301, 277, 230, 248, 398, 403, 445, 665, 710, 939, 901, 1026, 999, 1062, 840], "registrados_fem": [99, 116, 76, 102, 145, 161, 148, 270, 274, 365, 362, 432, 381, 422, 297]}, "MG": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [35989, 46293, 58829, 61469, 65345, 58136, 48260, 43661, 38394, 35179, 29439, 25482, 26331, 25622, 24430], "concluintes": [11038, 11977, 12608, 14048, 16239, 18983, 22607, 24275, 27245, 25428, 22278, 19928, 16198, 15235, 13461], "registrados": [5909, 6719, 6679, 7072, 8003, 8105, 8242, 9442, 9777, 10607, 9016, 10603, 9880, 9350, 8224], "reingresso": [2834, 2505, 2541, 2198, 2205, 2141, 1933, 2048, 2011, 2276, 2096, 3800, 4716, 5159, 4597], "primeiro_deslig": [1219, 1266, 3357, 3084, 4406, 4752, 3746, 4209, 4232, 4791, 3695, 6787, 7781, 6624, 5740], "deslig_recorrente": [28, 34, 124, 166, 294, 404, 397, 523, 583, 877, 679, 1012, 1328, 1493, 1759], "total_ativacoes": [8743, 9224, 9220, 9270, 10208, 10246, 10175, 11490, 11788, 12883, 11112, 14403, 14596, 14509, 12821], "total_desligamentos": [1247, 1300, 3481, 3250, 4700, 5156, 4143, 4732, 4815, 5668, 4374, 7799, 9109, 8117, 7499], "saldo_liquido": [7496, 7924, 5739, 6020, 5508, 5090, 6032, 6758, 6973, 7215, 6738, 6604, 5487, 6392, 5322], "registrados_masc": [4662, 5198, 5153, 5342, 5927, 5940, 5911, 6615, 6771, 7334, 6144, 7109, 6845, 6491, 5775], "registrados_fem": [1247, 1521, 1526, 1730, 2076, 2165, 2331, 2827, 3006, 3273, 2872, 3494, 3035, 2859, 2449]}, "MS": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [3479, 5133, 6782, 8241, 8665, 7795, 6930, 7169, 6265, 5404, 4964, 4213, 4527, 4664, 4397], "concluintes": [924, 989, 1409, 1201, 1125, 1900, 1899, 2403, 2984, 2430, 2596, 2517, 1977, 1808, 1641], "registrados": [474, 605, 558, 444, 566, 549, 1121, 1040, 1188, 1253, 1093, 1295, 1158, 1126, 1087], "reingresso": [432, 230, 359, 334, 390, 230, 42, 136, 111, 171, 58, 248, 149, 281, 89], "primeiro_deslig": [129, 3, 25, 31, 9, 82, 70, 20, 13, 12, 115, 267, 261, 383, 392], "deslig_recorrente": [0, 0, 2, 0, 0, 1, 1, 2, 0, 0, 3, 10, 11, 12, 19], "total_ativacoes": [906, 835, 917, 778, 956, 779, 1163, 1176, 1299, 1424, 1151, 1543, 1307, 1407, 1176], "total_desligamentos": [129, 3, 27, 31, 9, 83, 71, 22, 13, 12, 118, 277, 272, 395, 411], "saldo_liquido": [777, 832, 890, 747, 947, 696, 1092, 1154, 1286, 1412, 1033, 1266, 1035, 1012, 765], "registrados_masc": [388, 489, 460, 357, 436, 410, 861, 778, 846, 884, 767, 946, 841, 798, 797], "registrados_fem": [86, 116, 98, 87, 130, 139, 260, 262, 342, 369, 326, 349, 317, 328, 290]}, "MT": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [5641, 6646, 9613, 9669, 12072, 10082, 10078, 10093, 9442, 8791, 5941, 5666, 5890, 6234, 6234], "concluintes": [899, 1487, 1632, 1569, 2388, 2898, 3191, 3501, 3854, 3809, 3272, 3487, 3810, 2414, 2529], "registrados": [721, 880, 824, 995, 1195, 1356, 1502, 1814, 1899, 2039, 1675, 2052, 2096, 2116, 1978], "reingresso": [261, 182, 138, 124, 182, 119, 96, 109, 110, 160, 154, 175, 155, 155, 176], "primeiro_deslig": [52, 73, 139, 154, 160, 200, 255, 312, 335, 537, 468, 285, 395, 458, 928], "deslig_recorrente": [0, 1, 4, 4, 8, 8, 12, 29, 24, 34, 46, 35, 32, 42, 66], "total_ativacoes": [982, 1062, 962, 1119, 1377, 1475, 1598, 1923, 2009, 2199, 1829, 2227, 2251, 2271, 2154], "total_desligamentos": [52, 74, 143, 158, 168, 208, 267, 341, 359, 571, 514, 320, 427, 500, 994], "saldo_liquido": [930, 988, 819, 961, 1209, 1267, 1331, 1582, 1650, 1628, 1315, 1907, 1824, 1771, 1160], "registrados_masc": [534, 635, 613, 693, 851, 956, 1069, 1287, 1356, 1430, 1192, 1434, 1449, 1508, 1413], "registrados_fem": [187, 245, 211, 302, 344, 400, 433, 527, 543, 609, 483, 618, 647, 608, 565]}, "PA": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [3479, 4591, 5864, 6640, 7515, 9897, 8521, 8770, 8135, 8500, 6664, 6807, 7746, 8707, 6732], "concluintes": [1490, 1517, 1747, 2152, 2373, 2730, 3522, 3447, 3882, 4191, 2702, 3353, 3250, 3297, 3204], "registrados": [954, 1032, 1156, 1414, 1189, 1306, 1342, 1718, 1770, 1935, 2169, 2284, 2416, 2622, 2235], "reingresso": [245, 228, 217, 171, 107, 92, 108, 111, 83, 272, 458, 601, 693, 769, 696], "primeiro_deslig": [31, 34, 55, 115, 53, 41, 114, 209, 261, 570, 980, 980, 996, 1107, 1255], "deslig_recorrente": [1, 1, 3, 6, 6, 2, 5, 7, 7, 12, 34, 34, 56, 99, 103], "total_ativacoes": [1199, 1260, 1373, 1585, 1296, 1398, 1450, 1829, 1853, 2207, 2627, 2885, 3109, 3391, 2931], "total_desligamentos": [32, 35, 58, 121, 59, 43, 119, 216, 268, 582, 1014, 1014, 1052, 1206, 1358], "saldo_liquido": [1167, 1225, 1315, 1464, 1237, 1355, 1331, 1613, 1585, 1625, 1613, 1871, 2057, 2185, 1573], "registrados_masc": [644, 694, 796, 928, 816, 828, 887, 1044, 1157, 1215, 1444, 1516, 1608, 1765, 1533], "registrados_fem": [310, 338, 360, 486, 373, 478, 455, 674, 613, 720, 725, 768, 808, 857, 702]}, "PB": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [4210, 5131, 6026, 6835, 7797, 7788, 7387, 7632, 6984, 6739, 6381, 5618, 4726, 4802, 4524], "concluintes": [873, 1183, 1101, 1232, 1383, 1568, 2163, 2579, 2833, 3195, 2481, 2207, 1819, 1907, 1891], "registrados": [364, 348, 369, 423, 430, 382, 505, 720, 918, 1141, 959, 934, 899, 913, 831], "reingresso": [222, 226, 168, 146, 131, 103, 97, 122, 127, 158, 226, 280, 244, 261, 208], "primeiro_deslig": [104, 113, 128, 113, 111, 203, 198, 936, 277, 1040, 369, 473, 395, 369, 309], "deslig_recorrente": [2, 4, 8, 7, 4, 24, 21, 46, 27, 78, 31, 59, 58, 60, 52], "total_ativacoes": [586, 574, 537, 569, 561, 485, 602, 842, 1045, 1299, 1185, 1214, 1143, 1174, 1039], "total_desligamentos": [106, 117, 136, 120, 115, 227, 219, 982, 304, 1118, 400, 532, 453, 429, 361], "saldo_liquido": [480, 457, 401, 449, 446, 258, 383, -140, 741, 181, 785, 682, 690, 745, 678], "registrados_masc": [291, 258, 276, 310, 322, 283, 367, 512, 689, 832, 697, 665, 611, 651, 606], "registrados_fem": [73, 90, 93, 113, 108, 99, 138, 208, 229, 309, 262, 269, 288, 262, 225]}, "PE": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [6088, 7837, 11633, 11128, 13085, 11412, 9832, 10143, 9703, 9232, 7726, 7219, 6674, 5871, 6526], "concluintes": [1879, 1974, 2075, 2500, 2338, 2511, 2939, 3334, 4017, 4035, 3726, 3376, 3085, 3127, 3026], "registrados": [1173, 1210, 1135, 1108, 1148, 1005, 1041, 1323, 1486, 1811, 1637, 1927, 1839, 1994, 1722], "reingresso": [557, 341, 215, 132, 120, 86, 119, 180, 178, 440, 645, 794, 783, 2762, 773], "primeiro_deslig": [131, 128, 234, 262, 194, 211, 477, 537, 580, 1796, 3071, 1094, 2023, 1069, 959], "deslig_recorrente": [1, 3, 7, 12, 13, 15, 27, 53, 80, 112, 163, 190, 228, 226, 267], "total_ativacoes": [1730, 1551, 1350, 1240, 1268, 1091, 1160, 1503, 1664, 2251, 2282, 2721, 2622, 4756, 2495], "total_desligamentos": [132, 131, 241, 274, 207, 226, 504, 590, 660, 1908, 3234, 1284, 2251, 1295, 1226], "saldo_liquido": [1598, 1420, 1109, 966, 1061, 865, 656, 913, 1004, 343, -952, 1437, 371, 3461, 1269], "registrados_masc": [924, 900, 843, 835, 817, 743, 740, 938, 1025, 1293, 1154, 1371, 1270, 1426, 1222], "registrados_fem": [249, 310, 292, 273, 331, 262, 301, 385, 461, 518, 483, 556, 569, 568, 500]}, "PI": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [2397, 1648, 2624, 2611, 2918, 3656, 3745, 3789, 3458, 3458, 2513, 1975, 2517, 2451, 2733], "concluintes": [483, 565, 528, 614, 728, 939, 1058, 1303, 1451, 1552, 1641, 1397, 1514, 1308, 1195], "registrados": [202, 245, 195, 292, 261, 305, 302, 505, 580, 629, 706, 936, 899, 839, 640], "reingresso": [52, 105, 87, 50, 21, 19, 11, 31, 21, 30, 24, 32, 34, 43, 58], "primeiro_deslig": [23, 49, 46, 38, 38, 45, 44, 60, 67, 87, 71, 103, 106, 135, 115], "deslig_recorrente": [0, 1, 3, 1, 2, 1, 0, 9, 9, 5, 4, 7, 18, 16, 15], "total_ativacoes": [254, 350, 282, 342, 282, 324, 313, 536, 601, 659, 730, 968, 933, 882, 698], "total_desligamentos": [23, 50, 49, 39, 40, 46, 44, 69, 76, 92, 75, 110, 124, 151, 130], "saldo_liquido": [231, 300, 233, 303, 242, 278, 269, 467, 525, 567, 655, 858, 809, 731, 568], "registrados_masc": [162, 178, 159, 217, 214, 242, 249, 387, 463, 493, 547, 694, 664, 634, 495], "registrados_fem": [40, 67, 36, 75, 47, 63, 53, 118, 117, 136, 159, 242, 235, 205, 145]}, "PR": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [19994, 19010, 24937, 26486, 29852, 30489, 28046, 26254, 25110, 23556, 21395, 17896, 20065, 19961, 19518], "concluintes": [6515, 7139, 7116, 7756, 8121, 8780, 10374, 11459, 12830, 13085, 11533, 10071, 10848, 9482, 8779], "registrados": [3284, 3307, 3254, 3477, 3436, 3467, 3612, 4532, 4935, 5552, 5259, 5474, 5611, 5514, 5399], "reingresso": [738, 671, 1071, 1301, 1290, 1277, 1428, 1571, 1912, 1867, 1926, 2415, 2038, 1973, 2152], "primeiro_deslig": [635, 750, 3435, 3016, 3068, 2641, 3110, 3525, 3719, 3628, 4125, 3825, 3389, 3626, 3375], "deslig_recorrente": [17, 32, 81, 131, 209, 284, 422, 654, 727, 683, 891, 844, 864, 965, 1000], "total_ativacoes": [4022, 3978, 4325, 4778, 4726, 4744, 5040, 6103, 6847, 7419, 7185, 7889, 7649, 7487, 7551], "total_desligamentos": [652, 782, 3516, 3147, 3277, 2925, 3532, 4179, 4446, 4311, 5016, 4669, 4253, 4591, 4375], "saldo_liquido": [3370, 3196, 809, 1631, 1449, 1819, 1508, 1924, 2401, 3108, 2169, 3220, 3396, 2896, 3176], "registrados_masc": [2576, 2684, 2512, 2676, 2644, 2651, 2731, 3446, 3623, 4095, 3914, 4044, 4127, 4151, 4044], "registrados_fem": [708, 623, 742, 801, 792, 816, 881, 1086, 1312, 1457, 1345, 1430, 1484, 1363, 1355]}, "RJ": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [27243, 27095, 36474, 39542, 44637, 38105, 31523, 25414, 21592, 19656, 17217, 14337, 14246, 14283, 14226], "concluintes": [7307, 8339, 8530, 7686, 8747, 9718, 10955, 12733, 13969, 13148, 11911, 9812, 8245, 8189, 7136], "registrados": [4443, 4467, 5237, 5393, 5111, 4728, 4239, 4461, 5494, 6849, 5443, 6125, 6383, 6152, 5511], "reingresso": [1682, 1692, 1750, 1668, 1445, 1210, 1095, 1134, 1400, 2585, 3030, 2867, 2659, 2173, 2155], "primeiro_deslig": [1976, 1209, 3540, 2944, 3333, 4748, 4272, 4656, 4430, 4061, 3505, 4017, 2967, 2466, 2239], "deslig_recorrente": [29, 29, 67, 89, 124, 206, 261, 287, 323, 318, 309, 497, 461, 529, 573], "total_ativacoes": [6125, 6159, 6987, 7061, 6556, 5938, 5334, 5595, 6894, 9434, 8473, 8992, 9042, 8325, 7666], "total_desligamentos": [2005, 1238, 3607, 3033, 3457, 4954, 4533, 4943, 4753, 4379, 3814, 4514, 3428, 2995, 2812], "saldo_liquido": [4120, 4921, 3380, 4028, 3099, 984, 801, 652, 2141, 5055, 4659, 4478, 5614, 5330, 4854], "registrados_masc": [3334, 3245, 3963, 3909, 3540, 3409, 2984, 3208, 3747, 4614, 3691, 4259, 4443, 4339, 3872], "registrados_fem": [1109, 1222, 1274, 1484, 1571, 1319, 1255, 1253, 1747, 2235, 1752, 1866, 1940, 1813, 1639]}, "RN": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [3084, 3758, 4632, 5524, 5462, 4936, 3551, 3911, 3242, 2940, 2544, 2499, 3315, 2863, 2482], "concluintes": [1506, 1872, 1604, 1722, 1940, 1801, 2341, 2660, 2810, 2409, 1825, 1177, 1690, 1632, 1303], "registrados": [519, 625, 707, 648, 746, 637, 728, 1038, 1023, 1108, 848, 842, 820, 790, 668], "reingresso": [133, 111, 88, 57, 72, 58, 54, 82, 124, 147, 148, 188, 256, 296, 206], "primeiro_deslig": [80, 81, 152, 143, 107, 149, 138, 297, 409, 408, 574, 537, 416, 513, 474], "deslig_recorrente": [0, 1, 7, 6, 11, 4, 8, 27, 36, 31, 63, 69, 73, 85, 106], "total_ativacoes": [652, 736, 795, 705, 818, 695, 782, 1120, 1147, 1255, 996, 1030, 1076, 1086, 874], "total_desligamentos": [80, 82, 159, 149, 118, 153, 146, 324, 445, 439, 637, 606, 489, 598, 580], "saldo_liquido": [572, 654, 636, 556, 700, 542, 636, 796, 702, 816, 359, 424, 587, 488, 294], "registrados_masc": [399, 486, 547, 463, 554, 464, 515, 735, 720, 773, 588, 588, 566, 569, 480], "registrados_fem": [120, 139, 160, 185, 192, 173, 213, 303, 303, 335, 260, 254, 254, 221, 188]}, "RO": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [1880, 1857, 2171, 2123, 2252, 2842, 3118, 3167, 2988, 2705, 2152, 1668, 1955, 1960, 1469], "concluintes": [480, 621, 411, 454, 623, 850, 888, 886, 930, 1024, 1032, 1276, 1140, 968, 644], "registrados": [188, 222, 203, 282, 338, 420, 380, 478, 483, 514, 505, 865, 819, 799, 636], "reingresso": [127, 168, 160, 169, 217, 267, 367, 363, 69, 74, 74, 65, 46, 57, 82], "primeiro_deslig": [16, 8, 9, 10, 25, 39, 102, 261, 68, 81, 127, 91, 126, 181, 131], "deslig_recorrente": [0, 0, 0, 0, 0, 1, 2, 7, 3, 3, 7, 11, 12, 21, 14], "total_ativacoes": [315, 390, 363, 451, 555, 687, 747, 841, 552, 588, 579, 930, 865, 856, 718], "total_desligamentos": [16, 8, 9, 10, 25, 40, 104, 268, 71, 84, 134, 102, 138, 202, 145], "saldo_liquido": [299, 382, 354, 441, 530, 647, 643, 573, 481, 504, 445, 828, 727, 654, 573], "registrados_masc": [135, 169, 137, 207, 251, 282, 250, 308, 327, 326, 341, 598, 571, 537, 434], "registrados_fem": [53, 53, 66, 75, 87, 138, 130, 170, 156, 188, 164, 267, 248, 262, 202]}, "RR": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [527, 800, 823, 526, 929, 917, 967, 806, 636, 721, 664, 473, 493, 527, 544], "concluintes": [136, 318, 275, 283, 312, 266, 338, 190, 218, 306, 214, 228, 202, 228, 177], "registrados": [36, 69, 47, 71, 48, 69, 95, 88, 45, 146, 119, 182, 219, 182, 192], "reingresso": [21, 19, 18, 19, 10, 18, 20, 13, 14, 36, 15, 21, 8, 13, 24], "primeiro_deslig": [3, 6, 6, 15, 17, 25, 28, 16, 43, 89, 22, 97, 34, 50, 54], "deslig_recorrente": [0, 1, 1, 2, 0, 0, 2, 1, 1, 15, 10, 9, 8, 5, 5], "total_ativacoes": [57, 88, 65, 90, 58, 87, 115, 101, 59, 182, 134, 203, 227, 195, 216], "total_desligamentos": [3, 7, 7, 17, 17, 25, 30, 17, 44, 104, 32, 106, 42, 55, 59], "saldo_liquido": [54, 81, 58, 73, 41, 62, 85, 84, 15, 78, 102, 97, 185, 140, 157], "registrados_masc": [21, 45, 30, 48, 34, 41, 64, 54, 32, 96, 78, 125, 149, 127, 128], "registrados_fem": [15, 24, 17, 23, 14, 28, 31, 34, 13, 50, 41, 57, 70, 55, 64]}, "RS": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [19323, 23355, 25264, 26801, 28631, 26797, 25364, 22871, 20643, 18236, 15522, 13144, 13038, 13791, 12682], "concluintes": [4638, 5055, 5166, 5447, 6033, 6629, 7509, 8337, 9741, 10078, 8413, 8225, 8486, 7442, 6321], "registrados": [2416, 2642, 2513, 2723, 2715, 2719, 3077, 3156, 3386, 3925, 3426, 3859, 3903, 3868, 3568], "reingresso": [1029, 765, 1311, 874, 605, 497, 494, 469, 422, 619, 357, 456, 520, 495, 447], "primeiro_deslig": [416, 331, 76, 24, 463, 623, 967, 1242, 1277, 1521, 1027, 1237, 6538, 1066, 1544], "deslig_recorrente": [9, 3, 1, 1, 22, 23, 36, 50, 70, 91, 78, 99, 128, 98, 105], "total_ativacoes": [3445, 3407, 3824, 3597, 3320, 3216, 3571, 3625, 3808, 4544, 3783, 4315, 4423, 4363, 4015], "total_desligamentos": [425, 334, 77, 25, 485, 646, 1003, 1292, 1347, 1612, 1105, 1336, 6666, 1164, 1649], "saldo_liquido": [3020, 3073, 3747, 3572, 2835, 2570, 2568, 2333, 2461, 2932, 2678, 2979, -2243, 3199, 2366], "registrados_masc": [1913, 2083, 1919, 2043, 2006, 2007, 2274, 2275, 2402, 2724, 2342, 2749, 2763, 2805, 2593], "registrados_fem": [503, 559, 594, 680, 709, 712, 803, 881, 984, 1201, 1084, 1110, 1140, 1063, 975]}, "SC": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [10149, 13648, 17500, 18500, 21491, 20250, 18410, 17575, 14149, 13851, 12400, 10920, 11577, 11508, 11590], "concluintes": [4066, 4130, 4343, 4706, 4832, 5273, 6209, 7140, 7670, 7876, 7304, 6519, 5670, 5168, 4567], "registrados": [1976, 2156, 2059, 2195, 2283, 2223, 2437, 2972, 3027, 3348, 2934, 3195, 2984, 3021, 2824], "reingresso": [461, 442, 432, 381, 373, 268, 296, 338, 521, 485, 443, 593, 576, 629, 654], "primeiro_deslig": [436, 747, 640, 680, 710, 735, 862, 1173, 1385, 1505, 1737, 1534, 1133, 1239, 1434], "deslig_recorrente": [5, 22, 26, 34, 43, 64, 80, 130, 123, 141, 177, 194, 185, 230, 255], "total_ativacoes": [2437, 2598, 2491, 2576, 2656, 2491, 2733, 3310, 3548, 3833, 3377, 3788, 3560, 3650, 3478], "total_desligamentos": [441, 769, 666, 714, 753, 799, 942, 1303, 1508, 1646, 1914, 1728, 1318, 1469, 1689], "saldo_liquido": [1996, 1829, 1825, 1862, 1903, 1692, 1791, 2007, 2040, 2187, 1463, 2060, 2242, 2181, 1789], "registrados_masc": [1518, 1689, 1613, 1675, 1692, 1604, 1803, 2160, 2163, 2344, 2073, 2263, 2147, 2173, 2057], "registrados_fem": [458, 467, 446, 520, 591, 619, 634, 812, 864, 1004, 861, 932, 837, 848, 767]}, "SE": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [3488, 3426, 4526, 4295, 4781, 4546, 3719, 3344, 3118, 2729, 2492, 2112, 2090, 1955, 2108], "concluintes": [722, 665, 675, 738, 743, 1151, 1368, 1603, 1452, 1545, 1064, 1440, 1134, 851, 829], "registrados": [292, 363, 348, 324, 361, 367, 435, 583, 573, 587, 600, 653, 644, 602, 465], "reingresso": [158, 89, 92, 83, 94, 100, 100, 111, 111, 126, 202, 261, 307, 357, 295], "primeiro_deslig": [47, 74, 116, 256, 135, 166, 213, 255, 260, 313, 308, 434, 535, 425, 295], "deslig_recorrente": [1, 3, 9, 11, 16, 24, 28, 61, 43, 38, 130, 71, 162, 157, 97], "total_ativacoes": [450, 452, 440, 407, 455, 467, 535, 694, 684, 713, 802, 914, 951, 959, 760], "total_desligamentos": [48, 77, 125, 267, 151, 190, 241, 316, 303, 351, 438, 505, 697, 582, 392], "saldo_liquido": [402, 375, 315, 140, 304, 277, 294, 378, 381, 362, 364, 409, 254, 377, 368], "registrados_masc": [214, 266, 245, 237, 250, 268, 318, 419, 399, 394, 415, 437, 431, 397, 318], "registrados_fem": [78, 97, 103, 87, 111, 99, 117, 164, 174, 193, 185, 216, 213, 205, 147]}, "SP": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [82272, 101810, 124968, 133499, 147945, 127285, 113098, 100928, 91386, 86426, 76176, 61746, 63256, 58845, 51949], "concluintes": [26848, 26886, 32570, 33361, 33927, 39898, 44991, 47205, 51562, 50060, 46984, 41014, 37571, 33402, 27806], "registrados": [12824, 13362, 13800, 15233, 15974, 14003, 15441, 17602, 17221, 18089, 15572, 16948, 14898, 14803, 15268], "reingresso": [6641, 6011, 4592, 4429, 3565, 2940, 2484, 2857, 3059, 4216, 3369, 3988, 3741, 4115, 4701], "primeiro_deslig": [1415, 1521, 2415, 3142, 2737, 3796, 6086, 5906, 6094, 6747, 5389, 5832, 11901, 9327, 9477], "deslig_recorrente": [9, 27, 37, 59, 52, 106, 176, 193, 252, 314, 289, 366, 593, 572, 668], "total_ativacoes": [19465, 19373, 18392, 19662, 19539, 16943, 17925, 20459, 20280, 22305, 18941, 20936, 18639, 18918, 19969], "total_desligamentos": [1424, 1548, 2452, 3201, 2789, 3902, 6262, 6099, 6346, 7061, 5678, 6198, 12494, 9899, 10145], "saldo_liquido": [18041, 17825, 15940, 16461, 16750, 13041, 11663, 14360, 13934, 15244, 13263, 14738, 6145, 9019, 9824], "registrados_masc": [10713, 11213, 11566, 12742, 12979, 11344, 12325, 13954, 13301, 13997, 11758, 12849, 11431, 11505, 11589], "registrados_fem": [2111, 2149, 2234, 2491, 2995, 2659, 3116, 3648, 3920, 4092, 3814, 4099, 3467, 3298, 3679]}, "TO": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [1858, 2264, 2632, 2911, 3137, 3282, 3282, 3008, 2833, 2591, 1765, 1892, 2290, 2293, 2305], "concluintes": [394, 461, 526, 617, 752, 633, 1122, 1254, 1390, 1458, 1407, 940, 1058, 1194, 1028], "registrados": [181, 210, 184, 292, 288, 363, 421, 561, 584, 719, 690, 818, 687, 617, 645], "reingresso": [94, 79, 60, 40, 46, 62, 51, 76, 59, 142, 297, 332, 296, 307, 293], "primeiro_deslig": [25, 16, 38, 31, 27, 42, 69, 82, 102, 514, 484, 383, 536, 433, 435], "deslig_recorrente": [0, 0, 0, 1, 1, 1, 3, 5, 8, 21, 19, 42, 61, 65, 97], "total_ativacoes": [275, 289, 244, 332, 334, 425, 472, 637, 643, 861, 987, 1150, 983, 924, 938], "total_desligamentos": [25, 16, 38, 32, 28, 43, 72, 87, 110, 535, 503, 425, 597, 498, 532], "saldo_liquido": [250, 273, 206, 300, 306, 382, 400, 550, 533, 326, 484, 725, 386, 426, 406], "registrados_masc": [130, 153, 129, 216, 201, 244, 324, 394, 411, 478, 467, 573, 480, 434, 469], "registrados_fem": [51, 57, 55, 76, 87, 119, 97, 167, 173, 241, 223, 245, 207, 183, 176]}, "NORTE": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [15605, 18976, 22570, 24123, 27038, 29814, 26937, 25310, 24009, 21699, 17729, 15713, 17643, 19726, 16700], "concluintes": [4032, 4878, 5655, 6257, 6252, 7789, 9698, 8832, 11504, 10406, 8845, 8552, 8786, 8289, 7293], "registrados": [2047, 2403, 2276, 2995, 2859, 3118, 3098, 4027, 4240, 4943, 5118, 5887, 5698, 5911, 4963], "reingresso": [1040, 753, 644, 592, 503, 623, 721, 798, 491, 699, 1114, 1319, 1439, 1587, 1537], "primeiro_deslig": [112, 153, 183, 272, 300, 566, 606, 1054, 1141, 2048, 2459, 2649, 2510, 2614, 2760], "deslig_recorrente": [1, 2, 7, 10, 9, 7, 21, 30, 39, 78, 107, 162, 203, 282, 341], "total_ativacoes": [3087, 3156, 2920, 3587, 3362, 3741, 3819, 4825, 4731, 5642, 6232, 7206, 7137, 7498, 6500], "total_desligamentos": [113, 155, 190, 282, 309, 573, 627, 1084, 1180, 2126, 2566, 2811, 2713, 2896, 3101], "saldo_liquido": [2974, 3001, 2730, 3305, 3053, 3168, 3192, 3741, 3551, 3516, 3666, 4395, 4424, 4602, 3399], "registrados_masc": [1438, 1683, 1575, 2096, 2065, 2063, 2153, 2652, 2876, 3262, 3411, 4013, 3875, 4045, 3457], "registrados_fem": [609, 720, 701, 899, 794, 1055, 945, 1375, 1364, 1681, 1707, 1874, 1823, 1866, 1506]}, "NORDESTE": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [41249, 49719, 62136, 68195, 79716, 77545, 68346, 68620, 63109, 56987, 47246, 40233, 43260, 40324, 40089], "concluintes": [11185, 12562, 12838, 13762, 15066, 17412, 19983, 24456, 27225, 28386, 25504, 22420, 21433, 20446, 18765], "registrados": [6183, 6874, 6729, 6926, 7216, 7086, 7269, 9365, 10373, 12777, 11490, 13204, 12816, 12897, 10780], "reingresso": [2782, 1914, 1811, 1670, 1557, 1268, 1034, 1298, 1612, 2496, 3567, 4818, 4714, 6599, 4067], "primeiro_deslig": [682, 835, 1519, 1776, 1656, 1851, 2409, 8305, 3429, 10196, 9730, 6323, 7331, 6043, 5762], "deslig_recorrente": [18, 24, 49, 86, 97, 151, 170, 327, 356, 612, 788, 866, 1107, 1100, 1275], "total_ativacoes": [8965, 8788, 8540, 8596, 8773, 8354, 8303, 10663, 11985, 15273, 15057, 18022, 17530, 19496, 14847], "total_desligamentos": [700, 859, 1568, 1862, 1753, 2002, 2579, 8632, 3785, 10808, 10518, 7189, 8438, 7143, 7037], "saldo_liquido": [8265, 7929, 6972, 6734, 7020, 6352, 5724, 2031, 8200, 4465, 4539, 10833, 9092, 12353, 7810], "registrados_masc": [4660, 5112, 5027, 5127, 5327, 5240, 5267, 6717, 7467, 9125, 8168, 9327, 9067, 9223, 7823], "registrados_fem": [1523, 1762, 1702, 1799, 1889, 1846, 2002, 2648, 2906, 3652, 3322, 3877, 3749, 3674, 2957]}, "CENTRO-OESTE": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [23207, 28850, 37703, 42303, 48021, 43036, 38329, 36048, 31766, 30131, 23815, 21602, 23835, 24691, 23783], "concluintes": [5810, 6724, 7328, 7640, 9182, 11502, 12581, 14959, 16311, 16321, 13770, 13419, 12285, 10486, 9050], "registrados": [3960, 3830, 3517, 3816, 4629, 5367, 6025, 6973, 7173, 8331, 6907, 7728, 7381, 7107, 6590], "reingresso": [1457, 1419, 1411, 1384, 1483, 1451, 1615, 1871, 1703, 929, 898, 1467, 1358, 1371, 1836], "primeiro_deslig": [488, 598, 709, 750, 706, 1207, 1489, 1849, 1669, 2394, 2400, 2426, 2499, 2270, 4049], "deslig_recorrente": [19, 23, 41, 47, 49, 78, 106, 155, 169, 248, 246, 294, 362, 410, 531], "total_ativacoes": [5417, 5249, 4928, 5200, 6112, 6818, 7640, 8844, 8876, 9260, 7805, 9195, 8739, 8478, 8426], "total_desligamentos": [507, 621, 750, 797, 755, 1285, 1595, 2004, 1838, 2642, 2646, 2720, 2861, 2680, 4580], "saldo_liquido": [4910, 4628, 4178, 4403, 5357, 5533, 6045, 6840, 7038, 6618, 5159, 6475, 5878, 5798, 3846], "registrados_masc": [3107, 2949, 2751, 2909, 3507, 4077, 4486, 5160, 5180, 5951, 4880, 5492, 5230, 5044, 4740], "registrados_fem": [853, 881, 766, 907, 1122, 1290, 1539, 1813, 1993, 2380, 2027, 2236, 2151, 2063, 1850]}, "SUDESTE": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [151484, 181710, 229535, 242471, 268276, 232586, 200346, 176476, 157176, 147192, 127406, 106073, 108157, 102678, 94830], "concluintes": [46690, 48756, 55539, 56907, 60924, 70816, 81569, 87771, 96787, 92343, 84867, 73476, 64504, 58990, 50289], "registrados": [24016, 25510, 26716, 28661, 30089, 28083, 29165, 33131, 34097, 37490, 31560, 35550, 32798, 31909, 30362], "reingresso": [11459, 10490, 9263, 8531, 7479, 6657, 5742, 6464, 6687, 9443, 8780, 11027, 11365, 11744, 11712], "primeiro_deslig": [4683, 4071, 9450, 9304, 10629, 13511, 14425, 15251, 15175, 18625, 13032, 17089, 23068, 18811, 17853], "deslig_recorrente": [68, 91, 231, 316, 474, 728, 846, 1025, 1180, 1580, 1333, 1927, 2449, 2660, 3062], "total_ativacoes": [35475, 36000, 35979, 37192, 37568, 34740, 34907, 39595, 40784, 46933, 40340, 46577, 44163, 43653, 42074], "total_desligamentos": [4751, 4162, 9681, 9620, 11103, 14239, 15271, 16276, 16355, 20205, 14365, 19016, 25517, 21471, 20915], "saldo_liquido": [30724, 31838, 26298, 27572, 26465, 20501, 19636, 23319, 24429, 26728, 25975, 27561, 18646, 22182, 21159], "registrados_masc": [19355, 20381, 21440, 22693, 23159, 21515, 22060, 24894, 24849, 27248, 22635, 25456, 23839, 23430, 22209], "registrados_fem": [4661, 5129, 5276, 5968, 6930, 6568, 7105, 8237, 9248, 10242, 8925, 10094, 8959, 8479, 8153]}, "SUL": {"anos": [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "ingressantes": [49466, 56013, 67701, 71787, 79974, 77536, 71820, 66700, 59902, 55643, 49317, 41960, 44680, 45260, 43790], "concluintes": [15219, 16324, 16625, 17909, 18986, 20682, 24092, 26936, 30241, 31039, 27250, 24815, 25004, 22092, 19667], "registrados": [7676, 8105, 7826, 8395, 8434, 8409, 9126, 10660, 11348, 12825, 11619, 12528, 12498, 12403, 11791], "reingresso": [2228, 1878, 2814, 2556, 2268, 2042, 2218, 2378, 2855, 2971, 2726, 3464, 3134, 3097, 3253], "primeiro_deslig": [1487, 1828, 4151, 3720, 4241, 3999, 4939, 5940, 6381, 6654, 6889, 6596, 11060, 5931, 6353], "deslig_recorrente": [31, 57, 108, 166, 274, 371, 538, 834, 920, 915, 1146, 1137, 1177, 1293, 1360], "total_ativacoes": [9904, 9983, 10640, 10951, 10702, 10451, 11344, 13038, 14203, 15796, 14345, 15992, 15632, 15500, 15044], "total_desligamentos": [1518, 1885, 4259, 3886, 4515, 4370, 5477, 6774, 7301, 7569, 8035, 7733, 12237, 7224, 7713], "saldo_liquido": [8386, 8098, 6381, 7065, 6187, 6081, 5867, 6264, 6902, 8227, 6310, 8259, 3395, 8276, 7331], "registrados_masc": [6007, 6456, 6044, 6394, 6342, 6262, 6808, 7881, 8188, 9163, 8329, 9056, 9037, 9129, 8694], "registrados_fem": [1669, 1649, 1782, 2001, 2092, 2147, 2318, 2779, 3160, 3662, 3290, 3472, 3461, 3274, 3097]}};
+var REGIOES = {"NORTE": ["AC", "AM", "AP", "PA", "RO", "RR", "TO"], "NORDESTE": ["AL", "BA", "CE", "MA", "PB", "PE", "PI", "RN", "SE"], "CENTRO-OESTE": ["DF", "GO", "MS", "MT"], "SUDESTE": ["ES", "MG", "RJ", "SP"], "SUL": ["PR", "RS", "SC"]};
+var _selRegiao = null;
+var _selEstado = null;
+var _ingOffset = 0;
+var _eggActive = false;
+
+function selecionarRegiao(regiao) {
+  _selEstado = null;
+  _selRegiao = (_selRegiao === regiao) ? null : regiao;
+  _ingOffset = 0;
+  atualizarBotoes();
+  atualizarDashboard();
+}
+
+function selecionarEstado(uf) {
+  if (_selRegiao) {
+    var ufsReg = REGIOES[_selRegiao] || [];
+    if (ufsReg.indexOf(uf) < 0) return;
+    _selEstado = (_selEstado === uf) ? null : uf;
+  } else {
+    _selEstado = (_selEstado === uf) ? null : uf;
+  }
+  _ingOffset = 0;
+  atualizarBotoes();
+  atualizarDashboard();
+}
+
+function ativarEgg(ev){
+  if(ev)ev.stopPropagation();
+  if(_eggActive)return;
+  _eggActive=true;
+  var zone=document.getElementById('eggZone');
+  zone.classList.add('revealed');
+  zone.removeAttribute('onclick');
+  zone.innerHTML='<button class="egg-btn" onclick="event.stopPropagation();moverIng(-1)">&#9664;</button><button class="egg-btn" onclick="event.stopPropagation();ocultarEgg()">Ocultar</button><button class="egg-btn" onclick="event.stopPropagation();moverIng(1)">&#9654;</button>';
+}
+function ocultarEgg(){
+  _eggActive=false;
+  var zone=document.getElementById('eggZone');
+  zone.classList.remove('revealed');
+  zone.innerHTML='';
+  zone.setAttribute('onclick','ativarEgg(event)');
+}
+function moverIng(dir){
+  var uf=_selEstado||_selRegiao||'Brasil';
+  var d=DADOS[uf];if(!d)return;
+  var maxOff=d.anos.length-1;
+  if(dir>0){if(_ingOffset<maxOff)_ingOffset++}
+  else{if(_ingOffset>0)_ingOffset--}
+  atualizarDashboard();
+}
+
+function atualizarBotoes() {
+  var rBtns = document.querySelectorAll('.btn-regiao');
+  var eBtns = document.querySelectorAll('.btn-estado');
+  var label = document.getElementById('selLabel');
+  var container = document.getElementById('estadosContainer');
+
+  rBtns.forEach(function(b){ b.className = 'btn-regiao'; });
+  eBtns.forEach(function(b){ b.className = 'btn-estado'; });
+
+  if (_selRegiao && _selEstado) {
+    var ufsReg = REGIOES[_selRegiao] || [];
+    rBtns.forEach(function(b){
+      b.className = b.getAttribute('data-regiao') === _selRegiao ? 'btn-regiao active' : 'btn-regiao dimmed';
+    });
+    var arr = Array.from(document.querySelectorAll('.btn-estado'));
+    arr.sort(function(a,b){
+      var aIn = ufsReg.indexOf(a.getAttribute('data-uf')) >= 0 ? 0 : 1;
+      var bIn = ufsReg.indexOf(b.getAttribute('data-uf')) >= 0 ? 0 : 1;
+      if (aIn !== bIn) return aIn - bIn;
+      return a.getAttribute('data-uf').localeCompare(b.getAttribute('data-uf'));
+    });
+    arr.forEach(function(b){ container.appendChild(b); });
+    document.querySelectorAll('.btn-estado').forEach(function(b){
+      var uf = b.getAttribute('data-uf');
+      if (uf === _selEstado) {
+        b.className = 'btn-estado active-in-region';
+      } else if (ufsReg.indexOf(uf) >= 0) {
+        b.className = 'btn-estado highlighted';
+      } else {
+        b.className = 'btn-estado disabled';
+      }
+    });
+    label.textContent = _selEstado;
+  } else if (_selRegiao) {
+    var ufsReg = REGIOES[_selRegiao] || [];
+    rBtns.forEach(function(b){
+      b.className = b.getAttribute('data-regiao') === _selRegiao ? 'btn-regiao active' : 'btn-regiao dimmed';
+    });
+    var arr = Array.from(document.querySelectorAll('.btn-estado'));
+    arr.sort(function(a,b){
+      var aIn = ufsReg.indexOf(a.getAttribute('data-uf')) >= 0 ? 0 : 1;
+      var bIn = ufsReg.indexOf(b.getAttribute('data-uf')) >= 0 ? 0 : 1;
+      if (aIn !== bIn) return aIn - bIn;
+      return a.getAttribute('data-uf').localeCompare(b.getAttribute('data-uf'));
+    });
+    arr.forEach(function(b){ container.appendChild(b); });
+    document.querySelectorAll('.btn-estado').forEach(function(b){
+      var uf = b.getAttribute('data-uf');
+      if (ufsReg.indexOf(uf) >= 0) {
+        b.className = 'btn-estado highlighted';
+      } else {
+        b.className = 'btn-estado disabled';
+      }
+    });
+    label.textContent = 'Regi\u00e3o ' + _selRegiao;
+  } else if (_selEstado) {
+    var parentRegiao = null;
+    for (var r in REGIOES) {
+      if (REGIOES[r].indexOf(_selEstado) >= 0) { parentRegiao = r; break; }
+    }
+    var ufsReg = parentRegiao ? REGIOES[parentRegiao] : [];
+    rBtns.forEach(function(b){
+      b.className = b.getAttribute('data-regiao') === parentRegiao ? 'btn-regiao region-linked' : 'btn-regiao dimmed';
+    });
+    document.querySelectorAll('.btn-estado').forEach(function(b){
+      var uf = b.getAttribute('data-uf');
+      if (uf === _selEstado) {
+        b.className = 'btn-estado active';
+      } else if (ufsReg.indexOf(uf) >= 0) {
+        b.className = 'btn-estado region-linked';
+      } else {
+        b.className = 'btn-estado dimmed';
+      }
+    });
+    label.textContent = _selEstado;
+  } else {
+    var arr = Array.from(document.querySelectorAll('.btn-estado'));
+    arr.sort(function(a,b){ return a.getAttribute('data-uf').localeCompare(b.getAttribute('data-uf')); });
+    arr.forEach(function(b){ container.appendChild(b); });
+    label.textContent = 'Brasil (Total)';
+  }
+}
+
+function formatNum(n) {
+  return n.toLocaleString('pt-BR');
+}
+
+function calcSums(key){
+  var dd=DADOS[key];
+  if(!dd)return{ing:0,conc:0,reg:0};
+  var s={ing:0,conc:0,reg:0};
+  for(var j=0;j<dd.anos.length;j++){s.ing+=dd.ingressantes[j];s.conc+=dd.concluintes[j];s.reg+=dd.registrados[j]}
+  return s;
+}
+function getRegiaoDoEstado(uf){
+  for(var r in REGIOES){if(REGIOES[r].indexOf(uf)>=0)return r}
+  return null;
+}
+var NOMES_UF={'AC':'Acre','AL':'Alagoas','AM':'Amazonas','AP':'Amap\u00e1','BA':'Bahia','CE':'Cear\u00e1','DF':'Distrito Federal','ES':'Esp\u00edrito Santo','GO':'Goi\u00e1s','MA':'Maranh\u00e3o','MG':'Minas Gerais','MS':'Mato Grosso do Sul','MT':'Mato Grosso','PA':'Par\u00e1','PB':'Para\u00edba','PE':'Pernambuco','PI':'Piau\u00ed','PR':'Paran\u00e1','RJ':'Rio de Janeiro','RN':'Rio Grande do Norte','RO':'Rond\u00f4nia','RR':'Roraima','RS':'Rio Grande do Sul','SC':'Santa Catarina','SE':'Sergipe','SP':'S\u00e3o Paulo','TO':'Tocantins'};
+
+function buildTotaisBox(){
+  var box=document.getElementById('totaisBox');
+  var h='';
+  var nomes=['Ingressantes','Concluintes','Novos Registros'];
+  var chaves=['ing','conc','reg'];
+  if(_selEstado){
+    var reg=getRegiaoDoEstado(_selEstado);
+    var nE=NOMES_UF[_selEstado]||_selEstado;
+    var nR=reg?'Regi\u00e3o '+reg:'';
+    var sE=calcSums(_selEstado);
+    var sR=reg?calcSums(reg):{ing:0,conc:0,reg:0};
+    var sB=calcSums('Brasil');
+    var ufsR=reg?REGIOES[reg]:[];
+    h+='<div class="totais-titulo">Totais '+nE+'</div>';
+    h+='<table class="totais-table"><tr><th></th>';
+    h+='<td class="col-hdr">'+nE+'</td>';
+    if(reg){h+='<td class="col-hdr sep">'+nR+'</td><td class="col-hdr">%</td>'}
+    h+='<td class="col-hdr sep">BRASIL</td><td class="col-hdr">%</td></tr>';
+    for(var i=0;i<3;i++){
+      var c=chaves[i],vE=sE[c],vR=sR[c],vB=sB[c];
+      var pR=vR>0?((vE/vR)*100).toFixed(2):'\u2014';
+      var pB=vB>0?((vE/vB)*100).toFixed(2):'\u2014';
+      var tE=nomes[i]+' de '+nE+'\nSoma de todos os anos do per\u00edodo: '+formatNum(vE);
+      var tR=nomes[i]+' da '+nR+' ('+ufsR.join(', ')+')\nSoma de todos os anos: '+formatNum(vR);
+      var tPR=nE+' = '+pR+'% da '+nR+' em '+nomes[i]+'\nC\u00e1lculo: '+formatNum(vE)+' ('+nE+') \u00f7 '+formatNum(vR)+' ('+nR+') \u00d7 100';
+      var tB=nomes[i]+' do Brasil (27 UFs)\nSoma de todos os anos: '+formatNum(vB);
+      var tPB=nE+' = '+pB+'% do Brasil em '+nomes[i]+'\nC\u00e1lculo: '+formatNum(vE)+' ('+nE+') \u00f7 '+formatNum(vB)+' (Brasil) \u00d7 100';
+      h+='<tr><th>'+nomes[i]+'</th>';
+      h+='<td class="val" title="'+tE+'">'+formatNum(vE)+'</td>';
+      if(reg){h+='<td class="val sep" title="'+tR+'">'+formatNum(vR)+'</td>';
+      h+='<td class="pct" title="'+tPR+'">'+pR+'%</td>'}
+      h+='<td class="val sep" title="'+tB+'">'+formatNum(vB)+'</td>';
+      h+='<td class="pct" title="'+tPB+'">'+pB+'%</td></tr>';
+    }
+    h+='</table>';
+  }else if(_selRegiao){
+    var nR='Regi\u00e3o '+_selRegiao;
+    var sR=calcSums(_selRegiao);
+    var sB=calcSums('Brasil');
+    var ufsR=REGIOES[_selRegiao]||[];
+    h+='<div class="totais-titulo">Totais '+nR+'</div>';
+    h+='<table class="totais-table"><tr><th></th>';
+    h+='<td class="col-hdr">'+nR+'</td>';
+    h+='<td class="col-hdr sep">BRASIL</td><td class="col-hdr">%</td></tr>';
+    for(var i=0;i<3;i++){
+      var c=chaves[i],vR=sR[c],vB=sB[c];
+      var pB=vB>0?((vR/vB)*100).toFixed(2):'\u2014';
+      var tR=nomes[i]+' da '+nR+' ('+ufsR.join(', ')+')\nSoma de todos os anos: '+formatNum(vR);
+      var tB=nomes[i]+' do Brasil (27 UFs)\nSoma de todos os anos: '+formatNum(vB);
+      var tP=nR+' = '+pB+'% do Brasil em '+nomes[i]+'\nC\u00e1lculo: '+formatNum(vR)+' ('+nR+') \u00f7 '+formatNum(vB)+' (Brasil) \u00d7 100';
+      h+='<tr><th>'+nomes[i]+'</th>';
+      h+='<td class="val" title="'+tR+'">'+formatNum(vR)+'</td>';
+      h+='<td class="val sep" title="'+tB+'">'+formatNum(vB)+'</td>';
+      h+='<td class="pct" title="'+tP+'">'+pB+'%</td></tr>';
+    }
+    h+='</table>';
+  }else{
+    var sB=calcSums('Brasil');
+    h+='<div class="totais-titulo">Totais Brasil</div>';
+    h+='<table class="totais-table"><tr><th></th><td class="col-hdr">BRASIL</td></tr>';
+    for(var i=0;i<3;i++){
+      var c=chaves[i],vB=sB[c];
+      var tB=nomes[i]+' do Brasil (27 UFs)\nSoma de todos os anos do per\u00edodo: '+formatNum(vB);
+      h+='<tr><th>'+nomes[i]+'</th><td class="val" title="'+tB+'">'+formatNum(vB)+'</td></tr>';
+    }
+    h+='</table>';
+  }
+  box.innerHTML=h;
+}
+
+function atualizarDashboard() {
+  var uf = _selEstado || _selRegiao || 'Brasil';
+  var emMilhares = document.getElementById('chkMilhares').checked;
+  var d = DADOS[uf];
+  if (!d) return;
+
+  var divisor = emMilhares ? 1000 : 1;
+  var eixoY = emMilhares ? 'Milhares' : 'Quantidade';
+
+  var anos = d.anos;
+  var ing = d.ingressantes.map(function(v) { return Math.round(v / divisor * 10) / 10; });
+  var conc = d.concluintes.map(function(v) { return Math.round(v / divisor * 10) / 10; });
+  var reg = d.registrados.map(function(v) { return Math.round(v / divisor * 10) / 10; });
+
+  var hoverIng = d.anos.map(function(ano, i) {
+    return '<b>Ingressantes ' + ano + '</b><br>' +
+           'Total: ' + formatNum(d.ingressantes[i]);
+  });
+
+  var hoverConc = d.anos.map(function(ano, i) {
+    return '<b>Concluintes ' + ano + '</b><br>' +
+           'Total: ' + formatNum(d.concluintes[i]);
+  });
+
+  var hoverReg = d.anos.map(function(ano, i) {
+    var regT = d.registrados[i];
+    var masc = d.registrados_masc[i];
+    var fem = d.registrados_fem[i];
+    var reing = d.reingresso[i];
+    var pd = d.primeiro_deslig[i];
+    var dr = d.deslig_recorrente[i];
+    var ta = d.total_ativacoes[i];
+    var td = d.total_desligamentos[i];
+    var sl = d.saldo_liquido[i];
+    return '<b>Registrados ' + ano + '</b><br>' +
+           '<span style="color:#aaa">\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500</span><br>' +
+           '<b>Novos registros:</b> ' + formatNum(regT) + '<br>' +
+           '&nbsp;&nbsp;\u2642 Masculino: ' + formatNum(masc) + '<br>' +
+           '&nbsp;&nbsp;\u2640 Feminino: ' + formatNum(fem) + '<br>' +
+           '<span style="color:#aaa">\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500</span><br>' +
+           '<b>Reingressos:</b> ' + formatNum(reing) + '<br>' +
+           '<b>Total Ativa\u00e7\u00f5es:</b> ' + formatNum(ta) + '<br>' +
+           '<span style="color:#aaa">\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500</span><br>' +
+           '<b>1\u00ba Desligamento:</b> ' + formatNum(pd) + '<br>' +
+           '<b>Deslig. Recorrente:</b> ' + formatNum(dr) + '<br>' +
+           '<b>Total Desligamentos:</b> ' + formatNum(td) + '<br>' +
+           '<span style="color:#aaa">\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500</span><br>' +
+           '<b>Saldo L\u00edquido:</b> ' + (sl >= 0 ? '+' : '') + formatNum(sl);
+  });
+
+  var ingAnos = anos.slice(_ingOffset);
+  var ingY = ing.slice(0, ing.length - _ingOffset);
+  var ingHover = hoverIng.slice(0, hoverIng.length - _ingOffset);
+
+  var traceIng = {
+    x: ingAnos, y: ingY, name: 'Ingressantes',
+    type: 'scatter', mode: 'lines+markers+text',
+    text: ingY.map(function(v, i) { var t = emMilhares ? Math.round(v) : formatNum(v); if(_ingOffset > 0) t += ' (' + anos[i] + ')'; return t; }),
+    textposition: 'top center',
+    textfont: { size: 11, color: '#333' },
+    line: { color: '#2c2c2c', width: 2.5 },
+    marker: { color: '#fff', size: 9, line: { color: '#2c2c2c', width: 2 } },
+    hoverinfo: 'text',
+    hovertext: ingHover
+  };
+
+  var traceConc = {
+    x: anos, y: conc, name: 'Concluintes',
+    type: 'scatter', mode: 'lines+markers+text',
+    text: conc.map(function(v) { return emMilhares ? Math.round(v) : formatNum(v); }),
+    textposition: 'top center',
+    textfont: { size: 11, color: '#e67e22' },
+    line: { color: '#e67e22', width: 2.5 },
+    marker: { color: '#fff', size: 9, line: { color: '#e67e22', width: 2 } },
+    hoverinfo: 'text',
+    hovertext: hoverConc
+  };
+
+  var traceReg = {
+    x: anos, y: reg, name: 'Registrados',
+    type: 'scatter', mode: 'lines+markers+text',
+    text: reg.map(function(v) { return emMilhares ? Math.round(v) : formatNum(v); }),
+    textposition: 'bottom center',
+    textfont: { size: 11, color: '#1a6fc4' },
+    line: { color: '#1a6fc4', width: 2.5 },
+    marker: { color: '#fff', size: 9, line: { color: '#1a6fc4', width: 2 } },
+    hoverinfo: 'text',
+    hovertext: hoverReg
+  };
+
+  var subtitulo = emMilhares ? '(em milhares)' : '(valores absolutos)';
+  var layout = {
+    title: {
+      text: 'Ingressantes nos cursos de engenharia x concluintes x registrados ap\u00f3s conclus\u00e3o<br><i style="font-size:12px">' +
+            subtitulo + ' \u2014 ' + uf + '</i>',
+      font: { size: 14, color: '#333' },
+      x: 0.45
+    },
+    xaxis: {
+      tickmode: 'array', tickvals: anos, tickangle: 0,
+      gridcolor: '#eee', linecolor: '#ccc'
+    },
+    yaxis: {
+      title: { text: eixoY, font: { size: 12 } },
+      gridcolor: '#eee', linecolor: '#ccc',
+      rangemode: 'tozero'
+    },
+    legend: {
+      orientation: 'h', y: -0.12, x: 0.5, xanchor: 'center',
+      font: { size: 12 }
+    },
+    margin: { l: 60, r: 20, t: 70, b: 60 },
+    plot_bgcolor: '#fff',
+    paper_bgcolor: '#fff',
+    hovermode: 'closest',
+    hoverlabel: {
+      bgcolor: '#fff',
+      bordercolor: '#ccc',
+      font: { family: 'Segoe UI, sans-serif', size: 12, color: '#333' },
+      align: 'left'
+    }
+  };
+
+  var lastIdx = anos.length - 1;
+  layout.annotations = [
+    ingAnos.length>0?{x:ingAnos[ingAnos.length-1],y:ingY[ingY.length-1],xanchor:'left',yanchor:'middle',text:'<b>Ingressantes</b>',showarrow:false,font:{size:12,color:'#2c2c2c'},xshift:10}:{x:0,y:0,text:'',showarrow:false},
+    {x:anos[lastIdx],y:conc[lastIdx],xanchor:'left',yanchor:'middle',text:'<b>Concluintes</b>',showarrow:false,font:{size:12,color:'#e67e22'},xshift:10},
+    {x:anos[lastIdx],y:reg[lastIdx],xanchor:'left',yanchor:'middle',text:'<b>Registrados</b>',showarrow:false,font:{size:12,color:'#1a6fc4'},xshift:10}
+  ];
+  layout.xaxis.range = [anos[0] - 0.3, anos[lastIdx] + 1.8];
+  
+  var config = { responsive: true, displayModeBar: false, locale: 'pt-BR' };
+
+  Plotly.newPlot('grafico', [traceIng, traceConc, traceReg], layout, config);
+
+  // Recalcular taxas para o filtro selecionado
+  var somaRConc = 0, cConc = 0, somaRReg = 0, cReg = 0;
+  for (var i = 0; i < d.anos.length; i++) {
+    var anoAtual = d.anos[i];
+    var idx6 = d.anos.indexOf(anoAtual - 6);
+    if (idx6 >= 0 && d.ingressantes[idx6] > 0) {
+      somaRConc += d.concluintes[i] / d.ingressantes[idx6];
+      cConc++;
+    }
+    var idxReg6 = d.anos.indexOf(d.anos[i] - 6);
+    if (idxReg6 >= 0 && d.ingressantes[idxReg6] > 0) {
+      somaRReg += d.registrados[i] / d.ingressantes[idxReg6];
+      cReg++;
+    }
+  }
+  var tC = cConc > 0 ? Math.round((somaRConc / cConc) * 100) : '\u2014';
+  var tR = cReg > 0 ? Math.round((somaRReg / cReg) * 100) : '\u2014';
+  document.getElementById('taxaConclusao').textContent = tC;
+  document.getElementById('taxaRegistro').textContent = tR;
+  var pConv = (typeof tC === 'number' && typeof tR === 'number' && tC > 0) ? Math.round((tR / tC) * 100) : '—';
+  document.getElementById('taxaConversao').textContent = pConv;
+
+  buildTotaisBox();
+}
+
+atualizarDashboard();
+
+async function capturarDashboard(){
+  var btn=document.getElementById('btnCapture');
+  btn.disabled=true;
+  btn.title='Capturando...';
+  try{
+    var canvas=await html2canvas(document.body,{
+      scale:3,
+      useCORS:true,
+      backgroundColor:'#ffffff',
+      logging:false,
+      windowWidth:document.body.scrollWidth,
+      windowHeight:document.body.scrollHeight
+    });
+    canvas.toBlob(async function(blob){
+      try{
+        await navigator.clipboard.write([
+          new ClipboardItem({'image/png':blob})
+        ]);
+        btn.classList.add('copied');
+        btn.title='Copiado! Cole com Ctrl+V';
+        setTimeout(function(){
+          btn.classList.remove('copied');
+          btn.title='Copiar imagem do painel';
+        },2500);
+      }catch(e){
+        var link=document.createElement('a');
+        link.download='dashboard_confea.png';
+        link.href=canvas.toDataURL('image/png');
+        link.click();
+        btn.title='Baixado como PNG (clipboard indisponível)';
+        setTimeout(function(){btn.title='Copiar imagem do painel'},2500);
+      }
+    },'image/png');
+  }catch(e){
+    console.error('Erro na captura:',e);
+    btn.title='Erro na captura';
+    setTimeout(function(){btn.title='Copiar imagem do painel'},2500);
+  }finally{
+    btn.disabled=false;
+  }
+}
+</script>
+</body>
+</html>
